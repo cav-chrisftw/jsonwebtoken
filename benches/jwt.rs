@@ -1,5 +1,5 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, HeaderValue, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -22,7 +22,7 @@ fn bench_encode_custom_extra_headers(c: &mut Criterion) {
     let claim = Claims { sub: "b@b.com".to_owned(), company: "ACME".to_owned() };
     let key = EncodingKey::from_secret("secret".as_ref());
     let mut extras = HashMap::with_capacity(1);
-    extras.insert("custom".to_string(), "header".to_string());
+    extras.insert("custom".to_string(), HeaderValue::String("header".to_string()));
     let header = &Header { extras, ..Default::default() };
 
     c.bench_function("bench_encode", |b| {

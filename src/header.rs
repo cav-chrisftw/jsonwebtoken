@@ -106,6 +106,21 @@ impl<'de> Deserialize<'de> for Zip {
     }
 }
 
+/// Custom header value type that can hold strings, numbers, or booleans.
+///
+/// This enum is used for non-standard headers in the JWT header to support
+/// multiple value types while maintaining type safety.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum HeaderValue {
+    /// String value
+    String(String),
+    /// Numeric value (usize/u64)
+    Number(u64),
+    /// Boolean value
+    Boolean(bool),
+}
+
 /// A basic JWT header, the alg defaults to HS256 and typ is automatically
 /// set to `JWT`. All the other fields are optional.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -187,7 +202,7 @@ pub struct Header {
     /// Once serialized, all keys will be converted to fields at the root level of the header payload
     /// Ex: Dict("custom" -> "header") will be converted to "{"typ": "JWT", ..., "custom": "header"}"
     #[serde(flatten)]
-    pub extras: HashMap<String, String>,
+    pub extras: HashMap<String, HeaderValue>,
 }
 
 impl Header {

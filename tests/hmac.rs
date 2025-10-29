@@ -7,7 +7,7 @@ use wasm_bindgen_test::wasm_bindgen_test;
 use jsonwebtoken::errors::ErrorKind;
 use jsonwebtoken::jwk::Jwk;
 use jsonwebtoken::{
-    Algorithm, DecodingKey, EncodingKey, Header, Validation,
+    Algorithm, DecodingKey, EncodingKey, Header, HeaderValue, Validation,
     crypto::{sign, verify},
     decode, decode_header, encode,
 };
@@ -68,7 +68,7 @@ fn encode_with_extra_custom_header() {
         exp: OffsetDateTime::now_utc().unix_timestamp() + 10000,
     };
     let mut extras = HashMap::with_capacity(1);
-    extras.insert("custom".to_string(), "header".to_string());
+    extras.insert("custom".to_string(), HeaderValue::String("header".to_string()));
     let header = Header { kid: Some("kid".to_string()), extras, ..Default::default() };
     let token = encode(&header, &my_claims, &EncodingKey::from_secret(b"secret")).unwrap();
     let token_data = decode::<Claims>(
@@ -79,7 +79,10 @@ fn encode_with_extra_custom_header() {
     .unwrap();
     assert_eq!(my_claims, token_data.claims);
     assert_eq!("kid", token_data.header.kid.unwrap());
-    assert_eq!("header", token_data.header.extras.get("custom").unwrap().as_str());
+    match token_data.header.extras.get("custom").unwrap() {
+        HeaderValue::String(s) => assert_eq!("header", s),
+        _ => panic!("Expected string value"),
+    }
 }
 
 #[test]
@@ -91,8 +94,8 @@ fn encode_with_multiple_extra_custom_headers() {
         exp: OffsetDateTime::now_utc().unix_timestamp() + 10000,
     };
     let mut extras = HashMap::with_capacity(2);
-    extras.insert("custom1".to_string(), "header1".to_string());
-    extras.insert("custom2".to_string(), "header2".to_string());
+    extras.insert("custom1".to_string(), HeaderValue::String("header1".to_string()));
+    extras.insert("custom2".to_string(), HeaderValue::String("header2".to_string()));
     let header = Header { kid: Some("kid".to_string()), extras, ..Default::default() };
     let token = encode(&header, &my_claims, &EncodingKey::from_secret(b"secret")).unwrap();
     let token_data = decode::<Claims>(
@@ -104,8 +107,90 @@ fn encode_with_multiple_extra_custom_headers() {
     assert_eq!(my_claims, token_data.claims);
     assert_eq!("kid", token_data.header.kid.unwrap());
     let extras = token_data.header.extras;
-    assert_eq!("header1", extras.get("custom1").unwrap().as_str());
-    assert_eq!("header2", extras.get("custom2").unwrap().as_str());
+    match extras.get("custom1").unwrap() {
+        HeaderValue::String(s) => assert_eq!("header1", s),
+        _ => panic!("Expected string value"),
+    }
+    match extras.get("custom2").unwrap() {
+        HeaderValue::String(s) => assert_eq!("header2", s),
+        _ => panic!("Expected string value"),
+    }
+}
+
+#[test]
+#[wasm_bindgen_test]
+fn encode_with_numeric_header() {
+    let my_claims = Claims {
+        sub: "b@b.com".to_string(),
+        company: "ACME".to_string(),
+        exp: OffsetDateTime::now_utc().unix_timestamp() + 10000,
+    };
+    let mut extras = HashMap::with_capacity(2);
+    extras.insert("version".to_string(), HeaderValue::Number(42));
+    extras.insert("build".to_string(), HeaderValue::Number(1234567890));
+    let header = Header { kid: Some("kid".to_string()), extras, ..Default::default() };
+    let token = encode(&header, &my_claims, &EncodingKey::from_secret(b"secret")).unwrap();
+    let token_data = decode::<Claims>(
+        &token,
+        &DecodingKey::from_secret(b"secret"),
+        &Validation::new(Algorithm::HS256),
+    )
+    .unwrap();
+    assert_eq!(my_claims, token_data.claims);
+    assert_eq!("kid", token_data.header.kid.unwrap());
+    
+    // Verify numeric values
+    match token_data.header.extras.get("version").unwrap() {
+        HeaderValue::Number(n) => assert_eq!(42, *n),
+        _ => panic!("Expected numeric value"),
+    }
+    match token_data.header.extras.get("build").unwrap() {
+        HeaderValue::Number(n) => assert_eq!(1234567890, *n),
+        _ => panic!("Expected numeric value"),
+    }
+}
+
+#[test]
+#[wasm_bindgen_test]
+fn encode_with_mixed_header_types() {
+    let my_claims = Claims {
+        sub: "b@b.com".to_string(),
+        company: "ACME".to_string(),
+        exp: OffsetDateTime::now_utc().unix_timestamp() + 10000,
+    };
+    let mut extras = HashMap::with_capacity(3);
+    extras.insert("debug".to_string(), HeaderValue::Boolean(true));
+    extras.insert("production".to_string(), HeaderValue::Boolean(false));
+    extras.insert("version".to_string(), HeaderValue::Number(2));
+    extras.insert("app_name".to_string(), HeaderValue::String("my_app".to_string()));
+    
+    let header = Header { kid: Some("kid".to_string()), extras, ..Default::default() };
+    let token = encode(&header, &my_claims, &EncodingKey::from_secret(b"secret")).unwrap();
+    let token_data = decode::<Claims>(
+        &token,
+        &DecodingKey::from_secret(b"secret"),
+        &Validation::new(Algorithm::HS256),
+    )
+    .unwrap();
+    assert_eq!(my_claims, token_data.claims);
+    
+    // Verify mixed types
+    match token_data.header.extras.get("debug").unwrap() {
+        HeaderValue::Boolean(b) => assert_eq!(true, *b),
+        _ => panic!("Expected boolean value"),
+    }
+    match token_data.header.extras.get("production").unwrap() {
+        HeaderValue::Boolean(b) => assert_eq!(false, *b),
+        _ => panic!("Expected boolean value"),
+    }
+    match token_data.header.extras.get("version").unwrap() {
+        HeaderValue::Number(n) => assert_eq!(2, *n),
+        _ => panic!("Expected numeric value"),
+    }
+    match token_data.header.extras.get("app_name").unwrap() {
+        HeaderValue::String(s) => assert_eq!("my_app", s),
+        _ => panic!("Expected string value"),
+    }
 }
 
 #[test]
@@ -156,8 +241,14 @@ fn decode_token_custom_headers() {
     assert_eq!(my_claims, claims.claims);
     assert_eq!("kid", claims.header.kid.unwrap());
     let extras = claims.header.extras;
-    assert_eq!("header1", extras.get("custom1").unwrap().as_str());
-    assert_eq!("header2", extras.get("custom2").unwrap().as_str());
+    match extras.get("custom1").unwrap() {
+        HeaderValue::String(s) => assert_eq!("header1", s),
+        _ => panic!("Expected string value"),
+    }
+    match extras.get("custom2").unwrap() {
+        HeaderValue::String(s) => assert_eq!("header2", s),
+        _ => panic!("Expected string value"),
+    }
 }
 
 #[test]

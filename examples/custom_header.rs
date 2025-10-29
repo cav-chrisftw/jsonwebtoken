@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use jsonwebtoken::errors::ErrorKind;
-use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, HeaderValue, Validation, decode, encode};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Claims {
@@ -17,7 +17,7 @@ fn main() {
     let key = b"secret";
 
     let mut extras = HashMap::with_capacity(1);
-    extras.insert("custom".to_string(), "header".to_string());
+    extras.insert("custom".to_string(), HeaderValue::String("header".to_string()));
 
     let header = Header {
         kid: Some("signing_key".to_owned()),

@@ -10,7 +10,28 @@ pub(crate) fn b64_encode<T: AsRef<[u8]>>(input: T) -> String {
 
 #[inline]
 pub(crate) fn b64_decode<T: AsRef<[u8]>>(input: T) -> Result<Vec<u8>> {
-    URL_SAFE_NO_PAD.decode(input).map_err(|e| e.into())
+    let input_bytes = input.as_ref();
+    
+    // Try decoding with URL_SAFE_NO_PAD first (standard JWT format)
+    match URL_SAFE_NO_PAD.decode(input_bytes) {
+        Ok(result) => Ok(result),
+        Err(_) => {
+            // If that fails, try adding padding and decoding with the padded variant
+            // This handles AWS Cognito ALB OIDC tokens that include padding
+            let padded = add_padding(input_bytes);
+            use base64::engine::general_purpose::URL_SAFE;
+            URL_SAFE.decode(&padded).map_err(|e| e.into())
+        }
+    }
+}
+
+/// Add base64 padding if needed
+fn add_padding(input: &[u8]) -> Vec<u8> {
+    let mut result = input.to_vec();
+    while result.len() % 4 != 0 {
+        result.push(b'=');
+    }
+    result
 }
 
 /// Serializes a struct to JSON and encodes it in base64
